@@ -1,0 +1,24 @@
+{
+  "name": "validador-od",
+  "version": "1.0.0",
+  "description": "Validador OD — desglose visual Cliente → Corte → OD → Lote y exportación Excel",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "od-cliente": "node src/generar_od_cliente.js",
+    "rango": "node src/generar_rango.js",
+    "verificar": "node src/index.js --now",
+    "solo-reporte": "node src/index.js --now --sin-correo"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.0",
+    "pg": "^8.13.3"
+  }
+}

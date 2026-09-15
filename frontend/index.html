@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Validador OD · Colbeef</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="logo-check.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="logo-check.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="lockScreen" class="lock-screen">
+    <form id="pinForm" class="lock-card" autocomplete="off">
+      <img class="lock-logo" src="logo-check.svg" alt="Validador OD" />
+      <p class="brand-name">Colbeef</p>
+      <h1>Validador OD</h1>
+      <p class="lock-hint">Ingresa el PIN para continuar</p>
+      <input
+        id="pinInput"
+        class="pin-input"
+        type="password"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        maxlength="8"
+        placeholder="••••"
+        autocomplete="current-password"
+        required
+      />
+      <button class="btn primary lock-btn" type="submit">Entrar</button>
+      <p id="pinError" class="pin-error" hidden>PIN incorrecto</p>
+    </form>
+  </div>
+
+  <div id="appRoot" class="app" hidden>
+    <header class="top">
+      <div class="brand">
+        <img class="brand-logo" src="logo-check.svg" alt="Validador OD" />
+        <div class="brand-text">
+          <p class="brand-name">Colbeef</p>
+          <h1>Validador OD</h1>
+          <p class="tagline">Solo OD facturadas · Cliente → Corte → Orden OD → Lote</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="btnHoy" class="btn ghost" type="button">Hoy</button>
+        <button id="btnExcel" class="btn" type="button" disabled>Descargar Excel</button>
+        <button id="btnSalir" class="btn" type="button">Salir</button>
+      </div>
+    </header>
+
+    <section class="filters card">
+      <div class="filters-head">
+        <div>
+          <h2 class="filters-title">Filtros</h2>
+          <p id="rangoActivo" class="filters-hint">Mostrando el día de hoy</p>
+        </div>
+        <div class="live-badge" id="liveBadge" title="Auto-actualización">
+          <span class="live-dot"></span>
+          En vivo
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="field-group range-group">
+          <span class="field-label">Rango opcional</span>
+          <div class="range-row">
+            <label class="field compact">
+              <span>Desde</span>
+              <input type="date" id="desde" />
+            </label>
+            <span class="range-sep">→</span>
+            <label class="field compact">
+              <span>Hasta</span>
+              <input type="date" id="hasta" />
+            </label>
+            <button id="btnLimpiarFechas" class="btn-chip" type="button" title="Volver a hoy">Limpiar fechas</button>
+          </div>
+        </div>
+
+        <label class="field grow">
+          <span>Cliente</span>
+          <select id="cliente">
+            <option value="">Todos los clientes</option>
+          </select>
+        </label>
+
+        <label class="field grow">
+          <span>Corte</span>
+          <select id="corte">
+            <option value="">Todos los cortes</option>
+          </select>
+        </label>
+
+        <label class="field grow">
+          <span>Orden OD</span>
+          <input type="text" id="orden" placeholder="ej. OD-19079" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="chip-row" id="chipFilters">
+        <button type="button" class="chip" data-filter="soloDescuento" aria-pressed="false">Solo con descuento</button>
+        <button type="button" class="chip" data-filter="soloDifLista" aria-pressed="false">Solo distinto a lista</button>
+        <button type="button" class="chip active" data-filter="excluirPrecioCero" aria-pressed="true">Excluir precio OD = 0</button>
+        <button type="button" class="chip" data-filter="expandirTodo" aria-pressed="false">Expandir todo</button>
+        <button type="button" class="chip active" data-filter="autoRefresh" aria-pressed="true">Auto-actualizar 30s</button>
+      </div>
+
+      <input type="checkbox" id="soloDescuento" class="sr-only" />
+      <input type="checkbox" id="soloDifLista" class="sr-only" />
+      <input type="checkbox" id="excluirPrecioCero" class="sr-only" checked />
+      <input type="checkbox" id="expandirTodo" class="sr-only" />
+      <input type="checkbox" id="autoRefresh" class="sr-only" checked />
+
+      <p id="status" class="status">Cargando OD del día…</p>
+    </section>
+
+    <section class="stats" id="stats" hidden>
+      <div class="stat"><div class="v" id="sClientes">0</div><div class="l">Clientes</div></div>
+      <div class="stat"><div class="v" id="sOrdenes">0</div><div class="l">Órdenes OD</div></div>
+      <div class="stat"><div class="v" id="sCortes">0</div><div class="l">Cortes</div></div>
+      <div class="stat"><div class="v" id="sKg">0</div><div class="l">Kg</div></div>
+      <div class="stat accent"><div class="v" id="sValor">$0</div><div class="l">Valor OD</div></div>
+      <div class="stat warn"><div class="v" id="sDif">0</div><div class="l">≠ lista</div></div>
+      <div class="stat warn"><div class="v" id="sDesc">0</div><div class="l">Con descuento</div></div>
+    </section>
+
+    <section class="main">
+      <aside class="card side">
+        <h2>Clientes</h2>
+        <input type="search" id="buscaCliente" placeholder="Buscar cliente…" />
+        <div id="listaClientes" class="list"></div>
+      </aside>
+      <div class="card content">
+        <div class="content-head">
+          <h2 id="tituloVista">Desglose</h2>
+          <span id="vistaMeta" class="muted"></span>
+        </div>
+        <div id="tree" class="tree">
+          <p class="muted">Sin datos todavía.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

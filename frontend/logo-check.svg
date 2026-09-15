@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Validador OD">
+  <rect width="128" height="128" rx="24" fill="#ffffff"/>
+  <circle cx="64" cy="64" r="46" fill="none" stroke="#16a34a" stroke-width="12"/>
+  <path d="M38 66 L56 84 L92 44" fill="none" stroke="#16a34a" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
