@@ -81,7 +81,10 @@ export async function generarExcelOdCliente({
     { header: 'Desc. %', key: 'descuento_pct', width: 10 },
     { header: 'Precio lista', key: 'precio_lista', width: 12 },
     { header: 'Vs lista', key: 'vs_lista', width: 12 },
-    { header: 'Subtotal OD', key: 'subtotal_od', width: 14 },
+    { header: 'Subtotal OD (corte)', key: 'subtotal_od', width: 16 },
+    { header: 'Valor orden (OD)', key: 'valor_od_orden', width: 16 },
+    { header: 'Valor orden facturada', key: 'valor_factura', width: 18 },
+    { header: 'Productos factura', key: 'valor_productos_factura', width: 16 },
   ];
   header(wsC);
   for (const r of porCorteOd) {
@@ -93,6 +96,9 @@ export async function generarExcelOdCliente({
       precio_lista: money(r.precio_lista),
       kg: money(r.kg),
       subtotal_od: money(r.subtotal_od),
+      valor_od_orden: money(r.valor_od_orden),
+      valor_factura: money(r.valor_factura),
+      valor_productos_factura: money(r.valor_productos_factura),
     });
     if (r.vs_lista === 'MENOR_LISTA') {
       row.getCell('vs_lista').fill = {
@@ -114,7 +120,16 @@ export async function generarExcelOdCliente({
       };
     }
   }
-  moneyCols(wsC, ['kg', 'precio_od', 'descuento_pct', 'precio_lista', 'subtotal_od']);
+  moneyCols(wsC, [
+    'kg',
+    'precio_od',
+    'descuento_pct',
+    'precio_lista',
+    'subtotal_od',
+    'valor_od_orden',
+    'valor_factura',
+    'valor_productos_factura',
+  ]);
 
   // --- Detalle lote ---
   const wsD = wb.addWorksheet('Detalle lote');
@@ -133,6 +148,8 @@ export async function generarExcelOdCliente({
     { header: 'Diff vs lista', key: 'diff_vs_lista', width: 12 },
     { header: 'Vs lista', key: 'vs_lista', width: 12 },
     { header: 'Subtotal línea', key: 'subtotal_od', width: 14 },
+    { header: 'Valor orden (OD)', key: 'valor_od_orden', width: 16 },
+    { header: 'Valor orden facturada', key: 'valor_factura', width: 18 },
   ];
   header(wsD);
   for (const r of detalleLote) {
@@ -151,6 +168,8 @@ export async function generarExcelOdCliente({
       diff_vs_lista: money(r.diff_vs_lista),
       vs_lista: r.vs_lista,
       subtotal_od: money(r.subtotal_od),
+      valor_od_orden: money(r.valor_od_orden),
+      valor_factura: money(r.valor_factura),
     });
     if (r.vs_lista === 'MENOR_LISTA') {
       row.getCell('vs_lista').fill = {
@@ -172,7 +191,16 @@ export async function generarExcelOdCliente({
       };
     }
   }
-  moneyCols(wsD, ['kg', 'precio_od', 'descuento_pct', 'precio_lista', 'diff_vs_lista', 'subtotal_od']);
+  moneyCols(wsD, [
+    'kg',
+    'precio_od',
+    'descuento_pct',
+    'precio_lista',
+    'diff_vs_lista',
+    'subtotal_od',
+    'valor_od_orden',
+    'valor_factura',
+  ]);
 
   // --- Leyenda ---
   const wsL = wb.addWorksheet('Como leer');
@@ -185,7 +213,10 @@ export async function generarExcelOdCliente({
     { A: 'Precio OD', B: 'precio en la orden de despacho (es el que usa la OD; puede llevar descuento ya aplicado)' },
     { A: 'Desc. %', B: 'Porcentaje de descuento registrado en la línea de la OD' },
     { A: 'Precio lista', B: 'Precio estándar del criterio/corte en financiero.criterio_facturacion' },
-    { A: 'Subtotal', B: 'kg × precio_od' },
+    { A: 'Subtotal', B: 'kg × precio_od (solo ese corte en la OD)' },
+    { A: 'Valor orden (OD)', B: 'Suma de todos los cortes/líneas de esa orden de despacho' },
+    { A: 'Valor orden facturada', B: 'valor_factura de la factura ligada a la OD (total factura; puede incluir otras OD)' },
+    { A: 'Productos factura', B: 'Suma de líneas de producto en la factura, sin retenciones' },
     { A: 'Hoja Detalle lote', B: 'Máximo detalle: una fila por cliente+corte+OD+lote' },
     { A: 'Hoja Corte y OD', B: 'Misma info agrupada: suma kg de todos los lotes de ese corte en esa OD' },
     { A: 'Rango', B: `${fechaDesde} a ${fechaHasta}` },

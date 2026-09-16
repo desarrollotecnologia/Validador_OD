@@ -328,7 +328,12 @@ function renderTree() {
 
       for (const [odCodigo, od] of ods) {
         const kgOd = od.lotes.reduce((a, l) => a + l.kg, 0);
-        const valOd = od.lotes.reduce((a, l) => a + l.subtotal, 0);
+        const valOdCorte = od.lotes.reduce((a, l) => a + l.subtotal, 0);
+        const valorOrden = od.valor_od_orden != null ? od.valor_od_orden : valOdCorte;
+        const valorFacturada = od.valor_factura;
+        const valorProductosFac = od.valor_productos_factura;
+        const diff =
+          valorFacturada != null ? Math.round((valorOrden - valorFacturada) * 100) / 100 : null;
         const rows = od.lotes
           .map(
             (l) =>
@@ -342,19 +347,38 @@ function renderTree() {
             <span class="row-meta">
               <span class="pill ${od.estado_factura === 'FACTURADA' ? 'ok' : 'warn'}">${od.estado_factura === 'FACTURADA' ? 'FACTURADA' : 'SIN FACTURA'}</span>
               <span class="pill ${pillClass(od.vs_lista)}">${String(od.vs_lista || '').replaceAll('_', ' ')}</span>
-              &nbsp; $${money(od.precio_od)}/kg · ${od.lotes.length} lotes
+              &nbsp; OD $${money(valorOrden)} · Fac ${valorFacturada != null ? '$' + money(valorFacturada) : '—'}
             </span>
           </summary>
           <div class="body">
             <div class="grid4">
               <div class="mini"><div class="v">${fechaStr(od.fecha)}</div><div class="l">Fecha despacho</div></div>
-              <div class="mini"><div class="v">$${money(od.precio_od)}</div><div class="l">Precio OD</div></div>
-              <div class="mini"><div class="v">${od.precio_lista != null ? '$' + money(od.precio_lista) : '—'}</div><div class="l">Precio lista</div></div>
-              <div class="mini"><div class="v">${kg(kgOd)} kg</div><div class="l">Kg en esta OD</div></div>
+              <div class="mini"><div class="v">$${money(od.precio_od)}</div><div class="l">Precio OD / kg</div></div>
+              <div class="mini"><div class="v">${od.precio_lista != null ? '$' + money(od.precio_lista) : '—'}</div><div class="l">Precio lista / kg</div></div>
+              <div class="mini"><div class="v">${kg(kgOd)} kg</div><div class="l">Kg este corte en OD</div></div>
             </div>
+            <div class="grid4 valores-od">
+              <div class="mini accent">
+                <div class="v">$${money(valorOrden)}</div>
+                <div class="l">Valor de la orden (OD completa)</div>
+              </div>
+              <div class="mini accent">
+                <div class="v">${valorFacturada != null ? '$' + money(valorFacturada) : '—'}</div>
+                <div class="l">Valor orden facturada (total factura)</div>
+              </div>
+              <div class="mini">
+                <div class="v">${valorProductosFac != null ? '$' + money(valorProductosFac) : '—'}</div>
+                <div class="l">Productos en factura (sin retenciones)</div>
+              </div>
+              <div class="mini ${diff != null && Math.abs(diff) > 1 ? 'warn' : ''}">
+                <div class="v">${diff != null ? '$' + money(diff) : '—'}</div>
+                <div class="l">Diferencia OD − factura</div>
+              </div>
+            </div>
+            <div class="muted">Este corte (${corteNombre}) en la OD: $${money(valOdCorte)}</div>
             ${
               od.estado_factura === 'FACTURADA'
-                ? `<div class="muted">Factura ID ${od.id_factura || '—'} · ${fechaStr(od.fecha_factura)} · ${od.numeracion || 's/n'} · $${money(od.valor_factura)}</div>`
+                ? `<div class="muted">Factura ID ${od.id_factura || '—'} · ${fechaStr(od.fecha_factura)} · ${od.numeracion || 's/n'}</div>`
                 : `<div class="muted">Esta OD aún no está ligada a una factura en SIRT.</div>`
             }
             ${Number(od.descuento_pct) > 0 ? `<div class="muted">Descuento OD: ${od.descuento_pct}%</div>` : ''}
@@ -362,7 +386,7 @@ function renderTree() {
               <thead><tr><th>Lote</th><th class="num">Kg llevados</th><th class="num">Subtotal</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            <div class="muted" style="margin-top:8px">Total ${odCodigo} / ${corteNombre}: ${kg(kgOd)} kg · $${money(valOd)}</div>
+            <div class="muted" style="margin-top:8px">Total ${odCodigo} / ${corteNombre}: ${kg(kgOd)} kg · $${money(valOdCorte)}</div>
           </div>
         </details>`;
       }

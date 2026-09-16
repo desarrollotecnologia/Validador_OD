@@ -482,6 +482,16 @@ details[open] > summary.row::before { content: "▾"; }
 }
 .mini .v { font-weight: 750; font-size: 0.95rem; color: var(--accent); }
 .mini .l { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+.mini.accent {
+  background: linear-gradient(180deg, #ecfdf3, #fff);
+  border-color: #86efac;
+}
+.mini.warn {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+.mini.warn .v { color: var(--warn); }
+.valores-od { margin-top: 4px; }
 
 table {
   width: 100%;

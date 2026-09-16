@@ -69,6 +69,10 @@ export async function obtenerDetalleOdPorCliente({
       COALESCE(odd.descuento, 0) AS descuento_pct,
       cf.valor AS precio_lista,
       ROUND((odd.solicitud_kg * odd.precio)::numeric, 2) AS subtotal_od,
+      ROUND(
+        SUM(odd.solicitud_kg * odd.precio) OVER (PARTITION BY od.id)::numeric,
+        2
+      ) AS valor_od_orden,
       CASE
         WHEN cf.valor IS NULL THEN 'SIN_LISTA'
         WHEN ABS(odd.precio - cf.valor) <= 1 THEN 'IGUAL_LISTA'
@@ -81,6 +85,7 @@ export async function obtenerDetalleOdPorCliente({
       fac.numeracion,
       fac.numero_factura,
       fac.valor_factura,
+      fac.valor_productos_factura,
       CASE
         WHEN fac.id_factura IS NULL THEN 'SIN_FACTURA'
         ELSE 'FACTURADA'
@@ -102,7 +107,16 @@ export async function obtenerDetalleOdPorCliente({
         f.fecha_factura::date AS fecha_factura,
         f.numeracion,
         f.numero_factura,
-        f.valor_factura
+        f.valor_factura,
+        (
+          SELECT ROUND(COALESCE(SUM(cfc.valor * cfc.cantidad), 0)::numeric, 2)
+          FROM desposte.criterio_facturacion_corte cfc
+          JOIN financiero.criterio_facturacion cf2
+            ON cf2.id = cfc.id_criterio_facturacion
+          WHERE cfc.id_factura = f.id
+            AND NOT (cf2.nombre ~* '(retenci|reteica|retefuente)')
+            AND COALESCE(cf2.codigo_producto, '0') NOT IN ('0', '')
+        ) AS valor_productos_factura
       FROM desposte.vehiculo_asignado_orden_despacho v
       JOIN financiero.factura f ON f.id = v.id_factura
       WHERE v.id_orden_despacho = od.id
@@ -177,7 +191,10 @@ export function construirArbolOd(detalle) {
         id_factura: r.id_factura,
         fecha_factura: r.fecha_factura,
         numeracion: r.numeracion,
+        valor_od_orden: r.valor_od_orden != null ? Number(r.valor_od_orden) : null,
         valor_factura: r.valor_factura != null ? Number(r.valor_factura) : null,
+        valor_productos_factura:
+          r.valor_productos_factura != null ? Number(r.valor_productos_factura) : null,
         lotes: [],
       };
     }
@@ -251,6 +268,12 @@ export function agregarPorCorteOd(detalle) {
         descuento_pct: r.descuento_pct,
         precio_lista: r.precio_lista,
         vs_lista: r.vs_lista,
+        valor_od_orden: r.valor_od_orden != null ? Number(r.valor_od_orden) : null,
+        valor_factura: r.valor_factura != null ? Number(r.valor_factura) : null,
+        valor_productos_factura:
+          r.valor_productos_factura != null ? Number(r.valor_productos_factura) : null,
+        id_factura: r.id_factura,
+        estado_factura: r.estado_factura,
         kg: 0,
         subtotal_od: 0,
         lotes: [],
