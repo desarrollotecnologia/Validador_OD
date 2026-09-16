@@ -9,6 +9,7 @@ const state = {
   consultando: false,
   debounceTimer: null,
   pendiente: false,
+  busquedaAmpliaCliente: false,
   iniciado: false,
 };
 
@@ -112,10 +113,23 @@ function formatFechaCorta(iso) {
   return `${d}/${m}/${y}`;
 }
 
+function daysAgoISO(n) {
+  const parts = todayISO().split('-').map(Number);
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function rangoEfectivo() {
   const desde = $('desde').value;
   const hasta = $('hasta').value;
   const hoy = todayISO();
+
+  // Búsqueda de cliente: si no hay rango manual, mira último año
+  if (state.busquedaAmpliaCliente && !desde && !hasta) {
+    return { desde: daysAgoISO(365), hasta: hoy, modo: 'amplio' };
+  }
+
   if (!desde && !hasta) {
     return { desde: hoy, hasta: hoy, modo: 'hoy' };
   }
@@ -131,7 +145,10 @@ function rangoEfectivo() {
 function actualizarHintRango() {
   const r = rangoEfectivo();
   const el = $('rangoActivo');
-  if (r.modo === 'hoy') {
+  if (r.modo === 'amplio') {
+    el.textContent = `Búsqueda de cliente · últimos 12 meses · ${formatFechaCorta(r.desde)} → ${formatFechaCorta(r.hasta)}`;
+    el.classList.add('rango');
+  } else if (r.modo === 'hoy') {
     el.textContent = `Mostrando el día de hoy · ${formatFechaCorta(r.desde)}`;
     el.classList.remove('rango');
   } else if (r.desde === r.hasta) {
@@ -244,7 +261,7 @@ function renderStats(totales) {
 
 function renderListaClientes() {
   const box = $('listaClientes');
-  const q = ($('buscaCliente').value || '').toLowerCase();
+  const q = ($('buscaCliente').value || '').toLowerCase().trim();
   const resumen = state.data?.resumen || [];
   box.innerHTML = '';
 
@@ -254,29 +271,67 @@ function renderListaClientes() {
   todos.innerHTML = `<div class="name">Todos</div><div class="sub">${resumen.length} clientes</div>`;
   todos.onclick = () => {
     state.clienteActivo = '';
+    state.busquedaAmpliaCliente = false;
     $('cliente').value = '';
+    $('buscaCliente').value = '';
     renderListaClientes();
-    renderTree();
+    consultar(false);
   };
   box.appendChild(todos);
 
-  for (const r of resumen) {
-    if (q && !String(r.cliente).toLowerCase().includes(q)) continue;
+  const filtrados = resumen
+    .filter((r) => !q || String(r.cliente).toLowerCase().includes(q))
+    .sort((a, b) => String(b.fecha_reciente || '').localeCompare(String(a.fecha_reciente || '')));
+
+  for (const r of filtrados) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'client-item' + (state.clienteActivo === r.cliente ? ' active' : '');
+    const fechaTxt = r.fecha_reciente ? formatFechaCorta(r.fecha_reciente) : '—';
     btn.innerHTML = `
       <div class="name">${r.cliente}</div>
+      <div class="sub">NIT ${r.nit || '—'} · última OD ${fechaTxt}</div>
       <div class="sub">${r.num_ordenes} OD · ${kg(r.kg_total)} kg · $${money(r.valor_od)}</div>
     `;
-    btn.onclick = () => {
-      state.clienteActivo = r.cliente;
-      $('cliente').value = r.cliente;
-      renderListaClientes();
-      renderTree();
-    };
+    btn.onclick = () => seleccionarCliente(r.cliente);
     box.appendChild(btn);
   }
+
+  if (q && !filtrados.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'Sin coincidencias en este rango. Pulsa Enter para buscar en 12 meses.';
+    box.appendChild(empty);
+  }
+}
+
+function seleccionarCliente(nombre) {
+  state.clienteActivo = nombre;
+  $('cliente').value = nombre;
+  $('buscaCliente').value = nombre;
+  const r = rangoEfectivo();
+  // Sin rango manual → ampliar a 12 meses para ver todo el historial del cliente
+  state.busquedaAmpliaCliente = !$('desde').value && !$('hasta').value;
+  renderListaClientes();
+  consultar(false);
+}
+
+function ordenarOrdenesPorFecha(ordenesObj) {
+  return Object.entries(ordenesObj || {}).sort((a, b) => {
+    const fa = String(a[1].fecha || '').slice(0, 10);
+    const fb = String(b[1].fecha || '').slice(0, 10);
+    if (fa !== fb) return fa < fb ? 1 : -1;
+    return String(b[0]).localeCompare(String(a[0]));
+  });
+}
+
+function fechaRecienteCliente(node) {
+  let max = '';
+  for (const od of Object.values(node.ordenes || {})) {
+    const f = String(od.fecha || '').slice(0, 10);
+    if (f > max) max = f;
+  }
+  return max;
 }
 
 function renderTree() {
@@ -287,14 +342,19 @@ function renderTree() {
   }
 
   const tree = state.data.tree || {};
-  const expand = $('expandirTodo').checked;
-  let clientes = Object.keys(tree).sort();
+  const expand = $('expandirTodo').checked || !!state.clienteActivo;
+  let clientes = Object.keys(tree).sort((a, b) => {
+    const fa = fechaRecienteCliente(tree[a]);
+    const fb = fechaRecienteCliente(tree[b]);
+    if (fa !== fb) return fa < fb ? 1 : -1;
+    return a.localeCompare(b);
+  });
   if (state.clienteActivo) {
     clientes = clientes.filter((c) => c === state.clienteActivo);
   }
 
   $('tituloVista').textContent = state.clienteActivo || 'Todos los clientes filtrados';
-  $('vistaMeta').textContent = `${clientes.length} cliente(s) visibles`;
+  $('vistaMeta').textContent = `${clientes.length} cliente(s) · OD más recientes primero`;
 
   if (!clientes.length) {
     treeEl.innerHTML = '<p class="muted">No hay resultados con estos filtros.</p>';
@@ -304,89 +364,97 @@ function renderTree() {
   let html = '';
   for (const cli of clientes) {
     const node = tree[cli];
-    const cortes = Object.keys(node.cortes).sort();
+    const ordenes = ordenarOrdenesPorFecha(node.ordenes);
+    const fechaUlt = fechaRecienteCliente(node);
     html += `<details class="block" ${expand ? 'open' : ''}>
       <summary class="row">
         <span class="row-title">${cli}</span>
-        <span class="row-meta">NIT ${node.nit || '—'} · ${cortes.length} cortes</span>
+        <span class="row-meta">NIT ${node.nit || '—'} · última OD ${fechaUlt ? formatFechaCorta(fechaUlt) : '—'} · ${ordenes.length} OD</span>
       </summary>
       <div class="body">`;
 
-    for (const corteNombre of cortes) {
-      const corte = node.cortes[corteNombre];
-      const ods = Object.entries(corte.ods);
-      const kgCorte = ods.reduce((s, [, od]) => s + od.lotes.reduce((a, l) => a + l.kg, 0), 0);
-      const valCorte = ods.reduce((s, [, od]) => s + od.lotes.reduce((a, l) => a + l.subtotal, 0), 0);
+    for (const [odCodigo, od] of ordenes) {
+      const cortes = Object.entries(od.cortes || {}).sort((a, b) => a[0].localeCompare(b[0]));
+      const kgOd = cortes.reduce(
+        (s, [, c]) => s + c.lotes.reduce((a, l) => a + l.kg, 0),
+        0
+      );
+      const valOdCorte = cortes.reduce(
+        (s, [, c]) => s + c.lotes.reduce((a, l) => a + l.subtotal, 0),
+        0
+      );
+      const valorOrden = od.valor_od_orden != null ? od.valor_od_orden : valOdCorte;
+      const valorFacturada = od.valor_factura;
+      const valorProductosFac = od.valor_productos_factura;
+      const diff =
+        valorFacturada != null ? Math.round((valorOrden - valorFacturada) * 100) / 100 : null;
+      const fechaOd = formatFechaCorta(String(od.fecha || '').slice(0, 10));
 
       html += `<details class="block" ${expand ? 'open' : ''}>
         <summary class="row">
-          <span class="row-title">${corteNombre}</span>
-          <span class="row-meta">${ods.length} OD · ${kg(kgCorte)} kg · $${money(valCorte)}</span>
+          <span class="row-title">${odCodigo} · ${fechaOd || 's/f'}</span>
+          <span class="row-meta">
+            <span class="pill ${od.estado_factura === 'FACTURADA' ? 'ok' : 'warn'}">${od.estado_factura === 'FACTURADA' ? 'FACTURADA' : 'SIN FACTURA'}</span>
+            <span class="pill ${pillClass(od.vs_lista)}">${String(od.vs_lista || '').replaceAll('_', ' ')}</span>
+            &nbsp; OD $${money(valorOrden)} · Fac ${valorFacturada != null ? '$' + money(valorFacturada) : '—'}
+          </span>
         </summary>
         <div class="body">
-          <div class="muted">Código corte ${corte.codigo || '—'}</div>`;
+          <div class="grid4">
+            <div class="mini accent"><div class="v">${fechaOd || '—'}</div><div class="l">Fecha de la orden</div></div>
+            <div class="mini"><div class="v">${cortes.length}</div><div class="l">Cortes en la OD</div></div>
+            <div class="mini"><div class="v">${kg(kgOd)} kg</div><div class="l">Kg totales OD</div></div>
+            <div class="mini"><div class="v">$${money(valorOrden)}</div><div class="l">Valor de la orden</div></div>
+          </div>
+          <div class="grid4 valores-od">
+            <div class="mini accent">
+              <div class="v">$${money(valorOrden)}</div>
+              <div class="l">Valor de la orden (OD completa)</div>
+            </div>
+            <div class="mini accent">
+              <div class="v">${valorFacturada != null ? '$' + money(valorFacturada) : '—'}</div>
+              <div class="l">Valor orden facturada (total factura)</div>
+            </div>
+            <div class="mini">
+              <div class="v">${valorProductosFac != null ? '$' + money(valorProductosFac) : '—'}</div>
+              <div class="l">Productos en factura (sin retenciones)</div>
+            </div>
+            <div class="mini ${diff != null && Math.abs(diff) > 1 ? 'warn' : ''}">
+              <div class="v">${diff != null ? '$' + money(diff) : '—'}</div>
+              <div class="l">Diferencia OD − factura</div>
+            </div>
+          </div>
+          ${
+            od.estado_factura === 'FACTURADA'
+              ? `<div class="muted">Factura ID ${od.id_factura || '—'} · ${fechaStr(od.fecha_factura)} · ${od.numeracion || 's/n'}</div>`
+              : `<div class="muted">Esta OD aún no está ligada a una factura en SIRT.</div>`
+          }`;
 
-      for (const [odCodigo, od] of ods) {
-        const kgOd = od.lotes.reduce((a, l) => a + l.kg, 0);
-        const valOdCorte = od.lotes.reduce((a, l) => a + l.subtotal, 0);
-        const valorOrden = od.valor_od_orden != null ? od.valor_od_orden : valOdCorte;
-        const valorFacturada = od.valor_factura;
-        const valorProductosFac = od.valor_productos_factura;
-        const diff =
-          valorFacturada != null ? Math.round((valorOrden - valorFacturada) * 100) / 100 : null;
-        const rows = od.lotes
+      for (const [corteNombre, corte] of cortes) {
+        const kgCorte = corte.lotes.reduce((a, l) => a + l.kg, 0);
+        const valCorte = corte.lotes.reduce((a, l) => a + l.subtotal, 0);
+        const rows = corte.lotes
           .map(
             (l) =>
               `<tr><td>${l.lote}</td><td class="num">${kg(l.kg)}</td><td class="num">$${money(l.subtotal)}</td></tr>`
           )
           .join('');
+        const vs = corte.lotes[0]?.vs_lista;
 
         html += `<details class="block" ${expand ? 'open' : ''}>
           <summary class="row">
-            <span class="row-title">${odCodigo}</span>
+            <span class="row-title">${corteNombre}</span>
             <span class="row-meta">
-              <span class="pill ${od.estado_factura === 'FACTURADA' ? 'ok' : 'warn'}">${od.estado_factura === 'FACTURADA' ? 'FACTURADA' : 'SIN FACTURA'}</span>
-              <span class="pill ${pillClass(od.vs_lista)}">${String(od.vs_lista || '').replaceAll('_', ' ')}</span>
-              &nbsp; OD $${money(valorOrden)} · Fac ${valorFacturada != null ? '$' + money(valorFacturada) : '—'}
+              <span class="pill ${pillClass(vs)}">${String(vs || '').replaceAll('_', ' ')}</span>
+              &nbsp; ${kg(kgCorte)} kg · $${money(valCorte)}
             </span>
           </summary>
           <div class="body">
-            <div class="grid4">
-              <div class="mini"><div class="v">${fechaStr(od.fecha)}</div><div class="l">Fecha despacho</div></div>
-              <div class="mini"><div class="v">$${money(od.precio_od)}</div><div class="l">Precio OD / kg</div></div>
-              <div class="mini"><div class="v">${od.precio_lista != null ? '$' + money(od.precio_lista) : '—'}</div><div class="l">Precio lista / kg</div></div>
-              <div class="mini"><div class="v">${kg(kgOd)} kg</div><div class="l">Kg este corte en OD</div></div>
-            </div>
-            <div class="grid4 valores-od">
-              <div class="mini accent">
-                <div class="v">$${money(valorOrden)}</div>
-                <div class="l">Valor de la orden (OD completa)</div>
-              </div>
-              <div class="mini accent">
-                <div class="v">${valorFacturada != null ? '$' + money(valorFacturada) : '—'}</div>
-                <div class="l">Valor orden facturada (total factura)</div>
-              </div>
-              <div class="mini">
-                <div class="v">${valorProductosFac != null ? '$' + money(valorProductosFac) : '—'}</div>
-                <div class="l">Productos en factura (sin retenciones)</div>
-              </div>
-              <div class="mini ${diff != null && Math.abs(diff) > 1 ? 'warn' : ''}">
-                <div class="v">${diff != null ? '$' + money(diff) : '—'}</div>
-                <div class="l">Diferencia OD − factura</div>
-              </div>
-            </div>
-            <div class="muted">Este corte (${corteNombre}) en la OD: $${money(valOdCorte)}</div>
-            ${
-              od.estado_factura === 'FACTURADA'
-                ? `<div class="muted">Factura ID ${od.id_factura || '—'} · ${fechaStr(od.fecha_factura)} · ${od.numeracion || 's/n'}</div>`
-                : `<div class="muted">Esta OD aún no está ligada a una factura en SIRT.</div>`
-            }
-            ${Number(od.descuento_pct) > 0 ? `<div class="muted">Descuento OD: ${od.descuento_pct}%</div>` : ''}
+            <div class="muted">Código corte ${corte.codigo || '—'} · fecha OD ${fechaOd || '—'}</div>
             <table>
               <thead><tr><th>Lote</th><th class="num">Kg llevados</th><th class="num">Subtotal</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            <div class="muted" style="margin-top:8px">Total ${odCodigo} / ${corteNombre}: ${kg(kgOd)} kg · $${money(valOdCorte)}</div>
           </div>
         </details>`;
       }
@@ -431,7 +499,12 @@ async function consultar(silent = false) {
       second: '2-digit',
     });
     const r = rangoEfectivo();
-    const etiqueta = r.modo === 'hoy' ? 'hoy' : `${formatFechaCorta(r.desde)} → ${formatFechaCorta(r.hasta)}`;
+    const etiqueta =
+      r.modo === 'hoy'
+        ? 'hoy'
+        : r.modo === 'amplio'
+          ? `12 meses (${formatFechaCorta(r.desde)} → ${formatFechaCorta(r.hasta)})`
+          : `${formatFechaCorta(r.desde)} → ${formatFechaCorta(r.hasta)}`;
     setStatus(
       `Actualizado ${ahora} · ${etiqueta}: ${data.totales.lineas} líneas · ${data.totales.clientes} clientes · ${data.totales.ordenes} OD`,
       'ok'
@@ -486,6 +559,7 @@ function syncChips() {
 function irAHoy() {
   $('desde').value = '';
   $('hasta').value = '';
+  state.busquedaAmpliaCliente = false;
   actualizarHintRango();
   consultar(false);
 }
@@ -508,12 +582,30 @@ function iniciarApp() {
   $('btnExcel').addEventListener('click', descargarExcel);
   $('btnSalir').addEventListener('click', logout);
   $('buscaCliente').addEventListener('input', renderListaClientes);
+  $('buscaCliente').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = $('buscaCliente').value.trim();
+    if (!q) return;
+    seleccionarCliente(q);
+  });
 
-  $('desde').addEventListener('change', () => programarConsulta(80));
-  $('hasta').addEventListener('change', () => programarConsulta(80));
-  $('cliente').addEventListener('change', () => {
-    state.clienteActivo = $('cliente').value;
+  $('desde').addEventListener('change', () => {
+    state.busquedaAmpliaCliente = false;
     programarConsulta(80);
+  });
+  $('hasta').addEventListener('change', () => {
+    state.busquedaAmpliaCliente = false;
+    programarConsulta(80);
+  });
+  $('cliente').addEventListener('change', () => {
+    const v = $('cliente').value;
+    if (v) seleccionarCliente(v);
+    else {
+      state.clienteActivo = '';
+      state.busquedaAmpliaCliente = false;
+      programarConsulta(80);
+    }
   });
   $('corte').addEventListener('change', () => programarConsulta(80));
   $('orden').addEventListener('input', () => programarConsulta(450));

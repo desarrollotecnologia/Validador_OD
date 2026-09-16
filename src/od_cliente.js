@@ -175,13 +175,11 @@ export function construirArbolOd(detalle) {
   const tree = {};
   for (const r of detalle) {
     const cli = r.cliente;
-    if (!tree[cli]) tree[cli] = { nit: r.nit, cortes: {} };
-    if (!tree[cli].cortes[r.corte]) {
-      tree[cli].cortes[r.corte] = { codigo: r.codigo_corte, ods: {} };
-    }
+    if (!tree[cli]) tree[cli] = { nit: r.nit, ordenes: {} };
+
     const od = r.orden_od;
-    if (!tree[cli].cortes[r.corte].ods[od]) {
-      tree[cli].cortes[r.corte].ods[od] = {
+    if (!tree[cli].ordenes[od]) {
+      tree[cli].ordenes[od] = {
         fecha: r.fecha_despacho,
         precio_od: Number(r.precio_od),
         precio_lista: r.precio_lista != null ? Number(r.precio_lista) : null,
@@ -195,16 +193,34 @@ export function construirArbolOd(detalle) {
         valor_factura: r.valor_factura != null ? Number(r.valor_factura) : null,
         valor_productos_factura:
           r.valor_productos_factura != null ? Number(r.valor_productos_factura) : null,
-        lotes: [],
+        cortes: {},
       };
     }
-    tree[cli].cortes[r.corte].ods[od].lotes.push({
+
+    const nodeOd = tree[cli].ordenes[od];
+    const fechaOd = fechaStrKey(r.fecha_despacho);
+    const fechaAct = fechaStrKey(nodeOd.fecha);
+    if (fechaOd > fechaAct) nodeOd.fecha = r.fecha_despacho;
+
+    if (!nodeOd.cortes[r.corte]) {
+      nodeOd.cortes[r.corte] = { codigo: r.codigo_corte, lotes: [] };
+    }
+    nodeOd.cortes[r.corte].lotes.push({
       lote: r.lote,
       kg: Number(r.kg),
       subtotal: Number(r.subtotal_od),
+      precio_od: Number(r.precio_od),
+      precio_lista: r.precio_lista != null ? Number(r.precio_lista) : null,
+      descuento_pct: Number(r.descuento_pct) || 0,
+      vs_lista: r.vs_lista,
     });
   }
   return tree;
+}
+
+function fechaStrKey(v) {
+  if (!v) return '';
+  return String(v).slice(0, 10);
 }
 
 export async function obtenerResumenClienteOd(detalle) {
@@ -222,6 +238,8 @@ export async function obtenerResumenClienteOd(detalle) {
         valor_od: 0,
         con_descuento: 0,
         diferente_lista: 0,
+        fechas: new Set(),
+        fecha_reciente: null,
       });
     }
     const a = map.get(key);
@@ -230,6 +248,11 @@ export async function obtenerResumenClienteOd(detalle) {
     a.lotes.add(r.lote);
     a.kg_total += Number(r.kg) || 0;
     a.valor_od += Number(r.subtotal_od) || 0;
+    const f = fechaStrKey(r.fecha_despacho);
+    if (f) {
+      a.fechas.add(f);
+      if (!a.fecha_reciente || f > a.fecha_reciente) a.fecha_reciente = f;
+    }
     if (Number(r.descuento_pct) > 0) a.con_descuento += 1;
     if (r.vs_lista && r.vs_lista !== 'IGUAL_LISTA' && r.vs_lista !== 'SIN_LISTA') {
       a.diferente_lista += 1;
@@ -247,8 +270,15 @@ export async function obtenerResumenClienteOd(detalle) {
       valor_od: Math.round(a.valor_od * 100) / 100,
       lineas_con_descuento: a.con_descuento,
       lineas_diferente_lista: a.diferente_lista,
+      fecha_reciente: a.fecha_reciente,
+      fechas: [...a.fechas].sort((x, y) => (x < y ? 1 : -1)),
     }))
-    .sort((x, y) => y.valor_od - x.valor_od);
+    .sort((x, y) => {
+      const fx = x.fecha_reciente || '';
+      const fy = y.fecha_reciente || '';
+      if (fx !== fy) return fx < fy ? 1 : -1;
+      return y.valor_od - x.valor_od;
+    });
 }
 
 /** Agrega Cliente + Corte + OD (suma kilos de todos los lotes). */

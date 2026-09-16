@@ -202,28 +202,6 @@ export async function generarExcelOdCliente({
     'valor_factura',
   ]);
 
-  // --- Leyenda ---
-  const wsL = wb.addWorksheet('Como leer');
-  wsL.getColumn(1).width = 28;
-  wsL.getColumn(2).width = 80;
-  wsL.addRows([
-    { A: 'Concepto', B: 'Explicación' },
-    { A: 'Jerarquía', B: 'Cliente → Corte → Orden OD → Lote' },
-    { A: 'Kg llevados', B: 'solicitud_kg de orden_despacho_detalle (kilos de ese corte/lote en la OD)' },
-    { A: 'Precio OD', B: 'precio en la orden de despacho (es el que usa la OD; puede llevar descuento ya aplicado)' },
-    { A: 'Desc. %', B: 'Porcentaje de descuento registrado en la línea de la OD' },
-    { A: 'Precio lista', B: 'Precio estándar del criterio/corte en financiero.criterio_facturacion' },
-    { A: 'Subtotal', B: 'kg × precio_od (solo ese corte en la OD)' },
-    { A: 'Valor orden (OD)', B: 'Suma de todos los cortes/líneas de esa orden de despacho' },
-    { A: 'Valor orden facturada', B: 'valor_factura de la factura ligada a la OD (total factura; puede incluir otras OD)' },
-    { A: 'Productos factura', B: 'Suma de líneas de producto en la factura, sin retenciones' },
-    { A: 'Hoja Detalle lote', B: 'Máximo detalle: una fila por cliente+corte+OD+lote' },
-    { A: 'Hoja Corte y OD', B: 'Misma info agrupada: suma kg de todos los lotes de ese corte en esa OD' },
-    { A: 'Rango', B: `${fechaDesde} a ${fechaHasta}` },
-    { A: 'Filtro cliente', B: clienteFiltro || '(todos)' },
-  ]);
-  wsL.getRow(1).font = { bold: true };
-
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const sufijo = clienteFiltro
     ? `_${String(clienteFiltro).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30)}`
