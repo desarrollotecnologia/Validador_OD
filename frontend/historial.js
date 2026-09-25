@@ -24,10 +24,19 @@ window.ValidadorHistorial = (function () {
   }
 
   function fechaCorta(iso) {
-    if (!iso) return '—';
-    const s = String(iso).slice(0, 10);
-    const [y, m, d] = s.split('-');
-    return `${d}/${m}/${y}`;
+    if (iso == null || iso === '') return '—';
+    if (iso instanceof Date && !Number.isNaN(iso.getTime())) {
+      const y = iso.getFullYear();
+      const m = String(iso.getMonth() + 1).padStart(2, '0');
+      const d = String(iso.getDate()).padStart(2, '0');
+      return `${d}/${m}/${y}`;
+    }
+    const s = String(iso).trim();
+    const mIso = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (mIso) return `${mIso[3]}/${mIso[2]}/${mIso[1]}`;
+    const mLat = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (mLat) return s.slice(0, 10);
+    return '—';
   }
 
   function labelMes(ym) {
