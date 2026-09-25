@@ -149,16 +149,17 @@
     </div>
 
     <div id="vistaHistorial" hidden>
-      <section class="filters card">
+      <section class="filters card dash-toolbar">
         <div class="filters-head">
           <div>
-            <h2 class="filters-title">Historial de clientes</h2>
-            <p class="filters-hint">Ranking de compras, cortes por cliente y seguimiento por fechas</p>
+            <h2 class="filters-title">Dashboard clientes</h2>
+            <p class="filters-hint">Estadísticas, gráficas y ficha de seguimiento por cliente</p>
           </div>
+          <p id="hStatus" class="status dash-status">Elige un rango y consulta.</p>
         </div>
         <div class="filter-bar">
           <div class="field-group range-group">
-            <span class="field-label">Rango (obligatorio)</span>
+            <span class="field-label">Rango</span>
             <div class="range-row">
               <label class="field compact">
                 <span>Desde</span>
@@ -175,15 +176,14 @@
             </div>
           </div>
           <label class="field grow">
-            <span>Buscar cliente</span>
-            <input type="search" id="hBusca" placeholder="Nombre del cliente…" autocomplete="off" />
+            <span>Buscar en ranking</span>
+            <input type="search" id="hBusca" placeholder="Filtrar cliente…" autocomplete="off" />
           </label>
-          <button id="btnHConsultar" class="btn primary" type="button">Consultar historial</button>
+          <button id="btnHConsultar" class="btn primary" type="button">Actualizar</button>
         </div>
-        <p id="hStatus" class="status">Elige un rango desde / hasta y consulta.</p>
       </section>
 
-      <section class="stats" id="hStats" hidden>
+      <section class="stats dash-kpis" id="hStats" hidden>
         <div class="stat"><div class="v" id="hSClientes">0</div><div class="l">Clientes</div></div>
         <div class="stat"><div class="v" id="hSOrdenes">0</div><div class="l">Órdenes OD</div></div>
         <div class="stat"><div class="v" id="hSCortes">0</div><div class="l">Cortes</div></div>
@@ -191,81 +191,125 @@
         <div class="stat accent"><div class="v" id="hSValor">$0</div><div class="l">Valor OD</div></div>
       </section>
 
-      <section class="hist-layout">
-        <div class="card hist-ranking">
+      <section class="dash-grid">
+        <div class="card dash-chart-card">
           <div class="content-head">
-            <h2>Quién compra más</h2>
-            <span class="muted" id="hRankingMeta"></span>
+            <h2>Top 10 por valor</h2>
+            <span class="muted">Clic en barra o tabla para abrir ficha</span>
           </div>
-          <div class="table-wrap">
-            <table class="data-table" id="hTablaRanking">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Cliente</th>
-                  <th>NIT</th>
-                  <th class="num">OD</th>
-                  <th class="num">Cortes</th>
-                  <th class="num">Kg</th>
-                  <th class="num">Valor</th>
-                  <th class="num">%</th>
-                  <th>Primera</th>
-                  <th>Última</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="chart-box">
+            <canvas id="hChartValor" height="220"></canvas>
           </div>
         </div>
-
-        <div class="card hist-detalle" id="hDetallePanel">
+        <div class="card dash-chart-card">
           <div class="content-head">
-            <h2 id="hDetalleTitulo">Seguimiento del cliente</h2>
-            <span class="muted" id="hDetalleMeta">Selecciona un cliente del ranking</span>
+            <h2>Top 10 por kg</h2>
+            <span class="muted">Volumen despachado</span>
           </div>
-          <div id="hDetalleVacio" class="muted">Haz clic en un cliente de la tabla para ver cortes, fechas y órdenes.</div>
-          <div id="hDetalleBody" hidden>
-            <div class="hist-kpi" id="hDetalleKpis"></div>
-            <h3 class="hist-sub">Estudio por mes</h3>
-            <div class="table-wrap hist-mes-wrap">
-              <table class="data-table" id="hTablaMeses">
-                <thead>
-                  <tr>
-                    <th>Mes</th>
-                    <th class="num">OD</th>
-                    <th class="num">Cortes</th>
-                    <th class="num">Kg</th>
-                    <th class="num">Valor</th>
-                    <th class="num">% cliente</th>
-                    <th>Corte top del mes</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <div id="hMesDetalle" class="hist-mes-detalle" hidden></div>
-            <h3 class="hist-sub">Cortes que lleva (todo el rango)</h3>
-            <div class="table-wrap">
-              <table class="data-table" id="hTablaCortes">
-                <thead>
-                  <tr>
-                    <th>Corte</th>
-                    <th class="num">OD</th>
-                    <th class="num">Kg</th>
-                    <th class="num">Valor</th>
-                    <th class="num">%</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <h3 class="hist-sub">Seguimiento por fecha</h3>
-            <div id="hTimeline" class="hist-timeline"></div>
+          <div class="chart-box">
+            <canvas id="hChartKg" height="220"></canvas>
           </div>
         </div>
       </section>
+
+      <section class="card dash-table-card">
+        <div class="content-head">
+          <h2>Ranking de clientes</h2>
+          <span class="muted" id="hRankingMeta"></span>
+        </div>
+        <div class="table-wrap dash-table-wrap">
+          <table class="data-table" id="hTablaRanking">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cliente</th>
+                <th>NIT</th>
+                <th class="num">OD</th>
+                <th class="num">Cortes</th>
+                <th class="num">Kg</th>
+                <th class="num">Valor</th>
+                <th class="num">%</th>
+                <th>Primera</th>
+                <th>Última</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Ficha flotante del cliente (no agranda el layout) -->
+      <div id="hFichaOverlay" class="ficha-overlay" hidden>
+        <div class="ficha-panel" role="dialog" aria-modal="true" aria-labelledby="hFichaTitulo">
+          <header class="ficha-head">
+            <div>
+              <p class="ficha-eyebrow">Ficha del cliente</p>
+              <h2 id="hFichaTitulo">—</h2>
+              <p class="muted" id="hFichaMeta"></p>
+            </div>
+            <button type="button" class="ficha-close" id="hFichaCerrar" title="Cerrar" aria-label="Cerrar">×</button>
+          </header>
+          <div class="ficha-body">
+            <div class="hist-kpi" id="hDetalleKpis"></div>
+
+            <div class="ficha-section">
+              <h3>Evolución mensual</h3>
+              <div class="chart-box chart-box-sm">
+                <canvas id="hChartMes" height="160"></canvas>
+              </div>
+            </div>
+
+            <div class="ficha-section">
+              <h3>Estudio por mes</h3>
+              <div class="table-wrap hist-mes-wrap">
+                <table class="data-table" id="hTablaMeses">
+                  <thead>
+                    <tr>
+                      <th>Mes</th>
+                      <th class="num">OD</th>
+                      <th class="num">Kg</th>
+                      <th class="num">Valor</th>
+                      <th class="num">%</th>
+                      <th>Corte top</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div id="hMesDetalle" class="hist-mes-detalle" hidden></div>
+            </div>
+
+            <div class="ficha-section">
+              <h3>Cortes del rango</h3>
+              <div class="chart-box chart-box-sm">
+                <canvas id="hChartCortes" height="160"></canvas>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table" id="hTablaCortes">
+                  <thead>
+                    <tr>
+                      <th>Corte</th>
+                      <th class="num">OD</th>
+                      <th class="num">Kg</th>
+                      <th class="num">Valor</th>
+                      <th class="num">%</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="ficha-section">
+              <h3>Seguimiento por fecha</h3>
+              <div id="hTimeline" class="hist-timeline"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
   <script src="historial.js"></script>
 </body>
