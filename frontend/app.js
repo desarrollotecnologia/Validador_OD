@@ -40,6 +40,24 @@ async function apiFetch(url, options = {}) {
   }
   return res;
 }
+window.apiFetch = apiFetch;
+
+function cambiarVista(vista) {
+  const esHist = vista === 'historial';
+  $('vistaValidador').hidden = esHist;
+  $('vistaHistorial').hidden = !esHist;
+  $('tabValidador').classList.toggle('active', !esHist);
+  $('tabHistorial').classList.toggle('active', esHist);
+  $('btnHoy').hidden = esHist;
+  $('btnExcel').hidden = esHist;
+  $('taglineVista').textContent = esHist
+    ? 'Historial · ranking de compras · cortes por cliente · seguimiento por fechas'
+    : 'Solo OD facturadas · Cliente → Orden OD (fecha) → Corte → Lote';
+
+  if (esHist && window.ValidadorHistorial) {
+    window.ValidadorHistorial.consultar(false);
+  }
+}
 
 function mostrarLock(msg) {
   clearToken();
@@ -581,6 +599,8 @@ function iniciarApp() {
   $('btnLimpiarFechas').addEventListener('click', irAHoy);
   $('btnExcel').addEventListener('click', descargarExcel);
   $('btnSalir').addEventListener('click', logout);
+  $('tabValidador').addEventListener('click', () => cambiarVista('validador'));
+  $('tabHistorial').addEventListener('click', () => cambiarVista('historial'));
   $('buscaCliente').addEventListener('input', renderListaClientes);
   $('buscaCliente').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;

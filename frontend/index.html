@@ -39,16 +39,21 @@
         <div class="brand-text">
           <p class="brand-name">Colbeef</p>
           <h1>Validador OD</h1>
-          <p class="tagline">Solo OD facturadas · Cliente → Orden OD (fecha) → Corte → Lote</p>
+          <p class="tagline" id="taglineVista">Solo OD facturadas · Cliente → Orden OD (fecha) → Corte → Lote</p>
         </div>
       </div>
       <div class="top-actions">
+        <nav class="view-tabs" aria-label="Vistas">
+          <button type="button" class="tab active" data-view="validador" id="tabValidador">Validador</button>
+          <button type="button" class="tab" data-view="historial" id="tabHistorial">Historial clientes</button>
+        </nav>
         <button id="btnHoy" class="btn ghost" type="button">Hoy</button>
         <button id="btnExcel" class="btn" type="button" disabled>Descargar Excel</button>
         <button id="btnSalir" class="btn" type="button">Salir</button>
       </div>
     </header>
 
+    <div id="vistaValidador">
     <section class="filters card">
       <div class="filters-head">
         <div>
@@ -141,7 +146,127 @@
         </div>
       </div>
     </section>
+    </div>
+
+    <div id="vistaHistorial" hidden>
+      <section class="filters card">
+        <div class="filters-head">
+          <div>
+            <h2 class="filters-title">Historial de clientes</h2>
+            <p class="filters-hint">Ranking de compras, cortes por cliente y seguimiento por fechas</p>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <div class="field-group range-group">
+            <span class="field-label">Rango (obligatorio)</span>
+            <div class="range-row">
+              <label class="field compact">
+                <span>Desde</span>
+                <input type="date" id="hDesde" />
+              </label>
+              <span class="range-sep">→</span>
+              <label class="field compact">
+                <span>Hasta</span>
+                <input type="date" id="hHasta" />
+              </label>
+              <button id="btnH30" class="btn-chip" type="button">30 días</button>
+              <button id="btnH90" class="btn-chip" type="button">90 días</button>
+              <button id="btnH365" class="btn-chip" type="button">12 meses</button>
+            </div>
+          </div>
+          <label class="field grow">
+            <span>Buscar cliente</span>
+            <input type="search" id="hBusca" placeholder="Nombre del cliente…" autocomplete="off" />
+          </label>
+          <button id="btnHConsultar" class="btn primary" type="button">Consultar historial</button>
+        </div>
+        <p id="hStatus" class="status">Elige un rango desde / hasta y consulta.</p>
+      </section>
+
+      <section class="stats" id="hStats" hidden>
+        <div class="stat"><div class="v" id="hSClientes">0</div><div class="l">Clientes</div></div>
+        <div class="stat"><div class="v" id="hSOrdenes">0</div><div class="l">Órdenes OD</div></div>
+        <div class="stat"><div class="v" id="hSCortes">0</div><div class="l">Cortes</div></div>
+        <div class="stat"><div class="v" id="hSKg">0</div><div class="l">Kg</div></div>
+        <div class="stat accent"><div class="v" id="hSValor">$0</div><div class="l">Valor OD</div></div>
+      </section>
+
+      <section class="hist-layout">
+        <div class="card hist-ranking">
+          <div class="content-head">
+            <h2>Quién compra más</h2>
+            <span class="muted" id="hRankingMeta"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="hTablaRanking">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Cliente</th>
+                  <th>NIT</th>
+                  <th class="num">OD</th>
+                  <th class="num">Cortes</th>
+                  <th class="num">Kg</th>
+                  <th class="num">Valor</th>
+                  <th class="num">%</th>
+                  <th>Primera</th>
+                  <th>Última</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card hist-detalle" id="hDetallePanel">
+          <div class="content-head">
+            <h2 id="hDetalleTitulo">Seguimiento del cliente</h2>
+            <span class="muted" id="hDetalleMeta">Selecciona un cliente del ranking</span>
+          </div>
+          <div id="hDetalleVacio" class="muted">Haz clic en un cliente de la tabla para ver cortes, fechas y órdenes.</div>
+          <div id="hDetalleBody" hidden>
+            <div class="hist-kpi" id="hDetalleKpis"></div>
+            <h3 class="hist-sub">Estudio por mes</h3>
+            <div class="table-wrap hist-mes-wrap">
+              <table class="data-table" id="hTablaMeses">
+                <thead>
+                  <tr>
+                    <th>Mes</th>
+                    <th class="num">OD</th>
+                    <th class="num">Cortes</th>
+                    <th class="num">Kg</th>
+                    <th class="num">Valor</th>
+                    <th class="num">% cliente</th>
+                    <th>Corte top del mes</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="hMesDetalle" class="hist-mes-detalle" hidden></div>
+            <h3 class="hist-sub">Cortes que lleva (todo el rango)</h3>
+            <div class="table-wrap">
+              <table class="data-table" id="hTablaCortes">
+                <thead>
+                  <tr>
+                    <th>Corte</th>
+                    <th class="num">OD</th>
+                    <th class="num">Kg</th>
+                    <th class="num">Valor</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <h3 class="hist-sub">Seguimiento por fecha</h3>
+            <div id="hTimeline" class="hist-timeline"></div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
   <script src="app.js"></script>
+  <script src="historial.js"></script>
 </body>
 </html>

@@ -331,3 +331,248 @@ export function agregarPorCorteOd(detalle) {
       return String(x.orden_od).localeCompare(String(y.orden_od));
     });
 }
+
+/**
+ * Historial / estadísticas de clientes en un rango.
+ * ranking: quién compra más
+ * detalleCliente: cortes + timeline de OD del cliente elegido
+ */
+export function construirHistorialClientes(detalle, clienteFiltro = null) {
+  const rankingMap = new Map();
+  const totalValor = detalle.reduce((s, r) => s + (Number(r.subtotal_od) || 0), 0);
+  const totalKg = detalle.reduce((s, r) => s + (Number(r.kg) || 0), 0);
+
+  for (const r of detalle) {
+    const key = r.id_cliente;
+    if (!rankingMap.has(key)) {
+      rankingMap.set(key, {
+        id_cliente: r.id_cliente,
+        cliente: r.cliente,
+        nit: r.nit,
+        ordenes: new Set(),
+        cortes: new Set(),
+        kg: 0,
+        valor: 0,
+        fecha_primera: null,
+        fecha_ultima: null,
+      });
+    }
+    const a = rankingMap.get(key);
+    a.ordenes.add(r.orden_od);
+    a.cortes.add(r.corte);
+    a.kg += Number(r.kg) || 0;
+    a.valor += Number(r.subtotal_od) || 0;
+    const f = fechaStrKey(r.fecha_despacho);
+    if (f) {
+      if (!a.fecha_primera || f < a.fecha_primera) a.fecha_primera = f;
+      if (!a.fecha_ultima || f > a.fecha_ultima) a.fecha_ultima = f;
+    }
+  }
+
+  const ranking = [...rankingMap.values()]
+    .map((a) => ({
+      id_cliente: a.id_cliente,
+      cliente: a.cliente,
+      nit: a.nit,
+      num_ordenes: a.ordenes.size,
+      num_cortes: a.cortes.size,
+      kg: Math.round(a.kg * 100) / 100,
+      valor: Math.round(a.valor * 100) / 100,
+      pct_valor: totalValor > 0 ? Math.round((a.valor / totalValor) * 10000) / 100 : 0,
+      pct_kg: totalKg > 0 ? Math.round((a.kg / totalKg) * 10000) / 100 : 0,
+      fecha_primera: a.fecha_primera,
+      fecha_ultima: a.fecha_ultima,
+    }))
+    .sort((x, y) => y.valor - x.valor);
+
+  let detalleCliente = null;
+  if (clienteFiltro) {
+    const rows = detalle.filter((r) =>
+      String(r.cliente).toLowerCase().includes(String(clienteFiltro).toLowerCase())
+    );
+    const cortesMap = new Map();
+    const odsMap = new Map();
+
+    for (const r of rows) {
+      if (!cortesMap.has(r.corte)) {
+        cortesMap.set(r.corte, {
+          corte: r.corte,
+          codigo: r.codigo_corte,
+          kg: 0,
+          valor: 0,
+          ordenes: new Set(),
+          fechas: new Set(),
+        });
+      }
+      const c = cortesMap.get(r.corte);
+      c.kg += Number(r.kg) || 0;
+      c.valor += Number(r.subtotal_od) || 0;
+      c.ordenes.add(r.orden_od);
+      const f = fechaStrKey(r.fecha_despacho);
+      if (f) c.fechas.add(f);
+
+      if (!odsMap.has(r.orden_od)) {
+        odsMap.set(r.orden_od, {
+          orden_od: r.orden_od,
+          fecha: fechaStrKey(r.fecha_despacho),
+          kg: 0,
+          valor: 0,
+          valor_od_orden: r.valor_od_orden != null ? Number(r.valor_od_orden) : null,
+          valor_factura: r.valor_factura != null ? Number(r.valor_factura) : null,
+          estado_factura: r.estado_factura,
+          id_factura: r.id_factura,
+          numeracion: r.numeracion,
+          cortes: new Map(),
+        });
+      }
+      const od = odsMap.get(r.orden_od);
+      od.kg += Number(r.kg) || 0;
+      od.valor += Number(r.subtotal_od) || 0;
+      if (!od.cortes.has(r.corte)) {
+        od.cortes.set(r.corte, { corte: r.corte, kg: 0, valor: 0, lotes: [] });
+      }
+      const oc = od.cortes.get(r.corte);
+      oc.kg += Number(r.kg) || 0;
+      oc.valor += Number(r.subtotal_od) || 0;
+      oc.lotes.push({ lote: r.lote, kg: Number(r.kg), subtotal: Number(r.subtotal_od) });
+    }
+
+    const valorCli = rows.reduce((s, r) => s + (Number(r.subtotal_od) || 0), 0);
+    const cortes = [...cortesMap.values()]
+      .map((c) => ({
+        corte: c.corte,
+        codigo: c.codigo,
+        kg: Math.round(c.kg * 100) / 100,
+        valor: Math.round(c.valor * 100) / 100,
+        num_ordenes: c.ordenes.size,
+        pct_valor: valorCli > 0 ? Math.round((c.valor / valorCli) * 10000) / 100 : 0,
+        fechas: [...c.fechas].sort((a, b) => (a < b ? 1 : -1)),
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    const ordenes = [...odsMap.values()]
+      .map((o) => ({
+        orden_od: o.orden_od,
+        fecha: o.fecha,
+        kg: Math.round(o.kg * 100) / 100,
+        valor: Math.round(o.valor * 100) / 100,
+        valor_od_orden: o.valor_od_orden,
+        valor_factura: o.valor_factura,
+        estado_factura: o.estado_factura,
+        id_factura: o.id_factura,
+        numeracion: o.numeracion,
+        cortes: [...o.cortes.values()]
+          .map((c) => ({
+            ...c,
+            kg: Math.round(c.kg * 100) / 100,
+            valor: Math.round(c.valor * 100) / 100,
+          }))
+          .sort((a, b) => b.valor - a.valor),
+      }))
+      .sort((a, b) => {
+        if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+        return String(b.orden_od).localeCompare(String(a.orden_od));
+      });
+
+    const byFecha = new Map();
+    for (const o of ordenes) {
+      const f = o.fecha || 's/f';
+      if (!byFecha.has(f)) byFecha.set(f, []);
+      byFecha.get(f).push(o);
+    }
+    const timeline = [...byFecha.entries()]
+      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+      .map(([fecha, ods]) => ({
+        fecha,
+        num_ordenes: ods.length,
+        kg: Math.round(ods.reduce((s, o) => s + o.kg, 0) * 100) / 100,
+        valor: Math.round(ods.reduce((s, o) => s + o.valor, 0) * 100) / 100,
+        ordenes: ods,
+      }));
+
+    // Estudio por mes: OD / kg / valor y top cortes de cada mes
+    const byMes = new Map();
+    for (const r of rows) {
+      const f = fechaStrKey(r.fecha_despacho);
+      const mes = f ? f.slice(0, 7) : 's/f';
+      if (!byMes.has(mes)) {
+        byMes.set(mes, {
+          mes,
+          ordenes: new Set(),
+          cortes: new Set(),
+          kg: 0,
+          valor: 0,
+          porCorte: new Map(),
+        });
+      }
+      const m = byMes.get(mes);
+      m.ordenes.add(r.orden_od);
+      m.cortes.add(r.corte);
+      m.kg += Number(r.kg) || 0;
+      m.valor += Number(r.subtotal_od) || 0;
+      if (!m.porCorte.has(r.corte)) {
+        m.porCorte.set(r.corte, { corte: r.corte, kg: 0, valor: 0, ordenes: new Set() });
+      }
+      const mc = m.porCorte.get(r.corte);
+      mc.kg += Number(r.kg) || 0;
+      mc.valor += Number(r.subtotal_od) || 0;
+      mc.ordenes.add(r.orden_od);
+    }
+
+    const porMes = [...byMes.values()]
+      .map((m) => {
+        const cortesMes = [...m.porCorte.values()]
+          .map((c) => ({
+            corte: c.corte,
+            kg: Math.round(c.kg * 100) / 100,
+            valor: Math.round(c.valor * 100) / 100,
+            num_ordenes: c.ordenes.size,
+            pct_valor: m.valor > 0 ? Math.round((c.valor / m.valor) * 10000) / 100 : 0,
+          }))
+          .sort((a, b) => b.valor - a.valor);
+        return {
+          mes: m.mes,
+          num_ordenes: m.ordenes.size,
+          num_cortes: m.cortes.size,
+          kg: Math.round(m.kg * 100) / 100,
+          valor: Math.round(m.valor * 100) / 100,
+          pct_valor: valorCli > 0 ? Math.round((m.valor / valorCli) * 10000) / 100 : 0,
+          top_corte: cortesMes[0]?.corte || null,
+          top_corte_valor: cortesMes[0]?.valor || 0,
+          cortes: cortesMes,
+        };
+      })
+      .sort((a, b) => (a.mes < b.mes ? 1 : -1));
+
+    const head = ranking.find((r) =>
+      String(r.cliente).toLowerCase().includes(String(clienteFiltro).toLowerCase())
+    );
+
+    detalleCliente = {
+      cliente: head?.cliente || rows[0]?.cliente || clienteFiltro,
+      nit: head?.nit || rows[0]?.nit || null,
+      num_ordenes: new Set(rows.map((r) => r.orden_od)).size,
+      num_cortes: cortes.length,
+      kg: Math.round(rows.reduce((s, r) => s + (Number(r.kg) || 0), 0) * 100) / 100,
+      valor: Math.round(valorCli * 100) / 100,
+      fecha_primera: head?.fecha_primera || null,
+      fecha_ultima: head?.fecha_ultima || null,
+      cortes,
+      porMes,
+      timeline,
+      ordenes,
+    };
+  }
+
+  return {
+    totales: {
+      clientes: ranking.length,
+      ordenes: new Set(detalle.map((r) => r.orden_od)).size,
+      cortes: new Set(detalle.map((r) => r.corte)).size,
+      kg: Math.round(totalKg * 100) / 100,
+      valor: Math.round(totalValor * 100) / 100,
+    },
+    ranking,
+    detalleCliente,
+  };
+}

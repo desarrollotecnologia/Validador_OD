@@ -4,6 +4,7 @@ import {
   obtenerResumenClienteOd,
   agregarPorCorteOd,
   construirArbolOd,
+  construirHistorialClientes,
   listarClientesOd,
   listarCortesOd,
 } from '../od_cliente.js';
@@ -32,7 +33,10 @@ function parseFiltros(q) {
     ordenOd: q.orden || q.ordenOd || null,
     soloConDescuento: q.soloDescuento === '1' || q.soloDescuento === 'true',
     soloDiferenteLista: q.soloDifLista === '1' || q.soloDifLista === 'true',
-    excluirPrecioCero: q.excluirPrecioCero === '1' || q.excluirPrecioCero === 'true',
+    excluirPrecioCero:
+      q.excluirPrecioCero === undefined ||
+      q.excluirPrecioCero === '1' ||
+      q.excluirPrecioCero === 'true',
     estadoFactura: 'facturadas',
   };
 }
@@ -106,6 +110,31 @@ router.get('/consulta', async (req, res) => {
       detalle,
       tree,
     });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/historial', async (req, res) => {
+  try {
+    const f = parseFiltros(req.query);
+    const err = validarFechas(f);
+    if (err) return res.status(400).json({ error: err });
+
+    const detalle = await obtenerDetalleOdPorCliente({
+      ...f,
+      cliente: null,
+      corte: null,
+      ordenOd: null,
+      soloConDescuento: false,
+      soloDiferenteLista: false,
+      excluirPrecioCero: true,
+      estadoFactura: 'facturadas',
+    });
+
+    const hist = construirHistorialClientes(detalle, f.cliente);
+    res.json({ filtros: f, ...hist });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
