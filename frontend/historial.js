@@ -39,25 +39,34 @@ window.ValidadorHistorial = (function () {
     return '—';
   }
 
+  const MESES_ES = [
+    '',
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+
   function labelMes(ym) {
-    if (!ym || ym === 's/f') return 'Sin fecha';
-    const [y, m] = String(ym).split('-');
-    const nombres = [
-      '',
-      'Ene',
-      'Feb',
-      'Mar',
-      'Abr',
-      'May',
-      'Jun',
-      'Jul',
-      'Ago',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dic',
-    ];
-    return `${nombres[Number(m)] || m} ${y}`;
+    const m = String(ym || '').match(/^(\d{4})-(\d{2})/);
+    if (!m) return 'Sin fecha';
+    return `${MESES_ES[Number(m[2])]} ${m[1]}`;
+  }
+
+  function fechaLarga(iso) {
+    const m = String(iso || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '—';
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const dia = dt.toLocaleDateString('es-CO', { weekday: 'long' });
+    return `${dia.charAt(0).toUpperCase() + dia.slice(1)} ${m[3]} de ${MESES_ES[Number(m[2])]} de ${m[1]}`;
   }
 
   function todayISO() {
@@ -282,33 +291,70 @@ window.ValidadorHistorial = (function () {
     destroyChart('mes');
     destroyChart('cortes');
 
-    const meses = [...(d.porMes || [])].reverse();
+    // Orden cronológico: mes más antiguo a la izquierda
+    const meses = [...(d.porMes || [])].sort((a, b) => String(a.mes).localeCompare(String(b.mes)));
     state.charts.mes = new Chart($('hChartMes'), {
-      type: 'line',
+      type: 'bar',
       data: {
         labels: meses.map((m) => labelMes(m.mes)),
         datasets: [
           {
-            label: 'Valor',
+            label: 'Valor comprado',
             data: meses.map((m) => m.valor),
-            borderColor: GREEN,
-            backgroundColor: 'rgba(22,101,52,0.12)',
-            fill: true,
-            tension: 0.35,
-            pointRadius: 3,
-            pointBackgroundColor: GREEN2,
+            backgroundColor: GREEN,
+            borderRadius: 6,
+            maxBarThickness: 48,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Órdenes OD',
+            type: 'line',
+            data: meses.map((m) => m.num_ordenes),
+            borderColor: GREEN2,
+            backgroundColor: GREEN2,
+            tension: 0.3,
+            pointRadius: 4,
+            yAxisID: 'y1',
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: true, position: 'top', labels: { color: MUTED, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              title: (items) => items[0]?.label || '',
+              label(ctx) {
+                const m = meses[ctx.dataIndex];
+                if (ctx.dataset.yAxisID === 'y1') return ` ${m.num_ordenes} órdenes`;
+                return ` $${money(m.valor)} · ${kg(m.kg)} kg · ${m.pct_valor}% del cliente`;
+              },
+            },
+          },
+        },
         scales: {
-          x: { ticks: { color: MUTED, maxRotation: 0, font: { size: 10 } }, grid: { display: false } },
+          x: {
+            title: { display: true, text: 'Mes (de más antiguo a más reciente)', color: MUTED },
+            ticks: { color: GREEN, maxRotation: 0, font: { size: 11, weight: '600' } },
+            grid: { display: false },
+          },
           y: {
-            ticks: { color: MUTED, callback: (v) => (v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(0) + 'k' : v) },
+            position: 'left',
+            title: { display: true, text: 'Valor OD ($)', color: MUTED },
+            ticks: {
+              color: MUTED,
+              callback: (v) => (v >= 1e6 ? '$' + (v / 1e6).toFixed(0) + ' M' : v >= 1e3 ? '$' + (v / 1e3).toFixed(0) + ' mil' : '$' + v),
+            },
             grid: { color: '#e8f5e9' },
+          },
+          y1: {
+            position: 'right',
+            title: { display: true, text: 'Órdenes', color: MUTED },
+            ticks: { color: MUTED, precision: 0 },
+            grid: { display: false },
+            beginAtZero: true,
           },
         },
       },
@@ -354,7 +400,7 @@ window.ValidadorHistorial = (function () {
   }
 
   function renderMeses(d) {
-    const meses = d.porMes || [];
+    const meses = [...(d.porMes || [])].sort((a, b) => String(b.mes).localeCompare(String(a.mes)));
     const tbM = $('hTablaMeses').querySelector('tbody');
     $('hMesDetalle').hidden = true;
     $('hMesDetalle').innerHTML = '';
@@ -434,7 +480,7 @@ window.ValidadorHistorial = (function () {
                 .join('');
               return `<details class="block hist-od">
                 <summary class="row">
-                  <span class="row-title">${escapeHtml(o.orden_od)}</span>
+                  <span class="row-title">${escapeHtml(o.orden_od)} · ${fechaCorta(o.fecha)}</span>
                   <span class="row-meta">$${money(o.valor)} · Fac ${o.valor_factura != null ? '$' + money(o.valor_factura) : '—'}</span>
                 </summary>
                 <div class="body"><ul class="hist-cut-list">${cortes}</ul></div>
@@ -443,7 +489,7 @@ window.ValidadorHistorial = (function () {
             .join('');
           return `<div class="hist-day">
             <div class="hist-day-head">
-              <strong>${fechaCorta(dia.fecha)}</strong>
+              <strong>${fechaLarga(dia.fecha)}</strong>
               <span class="muted">${dia.num_ordenes} OD · ${kg(dia.kg)} kg · $${money(dia.valor)}</span>
             </div>
             ${ods}

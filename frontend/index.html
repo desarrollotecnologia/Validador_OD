@@ -126,9 +126,31 @@
       <div class="stat"><div class="v" id="sCortes">0</div><div class="l">Cortes</div></div>
       <div class="stat"><div class="v" id="sKg">0</div><div class="l">Kg</div></div>
       <div class="stat accent"><div class="v" id="sValor">$0</div><div class="l">Valor OD</div></div>
-      <div class="stat warn"><div class="v" id="sDif">0</div><div class="l">≠ lista</div></div>
-      <div class="stat warn"><div class="v" id="sDesc">0</div><div class="l">Con descuento</div></div>
+      <div class="stat warn stat-click" id="statDif" title="Doble clic para ver el detalle"><div class="v" id="sDif">0</div><div class="l">≠ lista · doble clic</div></div>
+      <div class="stat warn stat-click" id="statDesc" title="Doble clic para ver el detalle"><div class="v" id="sDesc">0</div><div class="l">Con descuento · doble clic</div></div>
     </section>
+
+    <div id="dFichaOverlay" class="ficha-overlay" hidden>
+      <div class="ficha-panel" role="dialog" aria-modal="true" aria-labelledby="dFichaTitulo">
+        <header class="ficha-head">
+          <div>
+            <p class="ficha-eyebrow" id="dFichaEyebrow">Detalle</p>
+            <h2 id="dFichaTitulo">—</h2>
+            <p class="muted" id="dFichaMeta"></p>
+          </div>
+          <button type="button" class="ficha-close" id="dFichaCerrar" title="Cerrar" aria-label="Cerrar">×</button>
+        </header>
+        <div class="ficha-body">
+          <div class="hist-kpi" id="dFichaKpis"></div>
+          <div class="table-wrap">
+            <table class="data-table" id="dFichaTabla">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <section class="main">
       <aside class="card side">

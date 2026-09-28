@@ -1,7 +1,10 @@
 import pkg from 'pg';
 import { config } from './config.js';
 
-const { Pool } = pkg;
+const { Pool, types } = pkg;
+
+// DATE → 'YYYY-MM-DD' (evita que String(Date) produzca "Fri Aug 28 ...")
+types.setTypeParser(1082, (v) => v);
 
 export const pool = new Pool({
   ...config.pg,

@@ -388,6 +388,15 @@ input:focus, select:focus {
   background: #fffbeb;
 }
 .stat.warn .v { color: var(--warn); }
+.stat-click {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.stat-click:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(180, 83, 9, 0.15);
+}
 
 .main {
   display: grid;

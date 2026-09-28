@@ -277,6 +277,105 @@ function renderStats(totales) {
   $('sDesc').textContent = String(totales.con_descuento);
 }
 
+function escHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Agrupa líneas de lote en una fila por OD + corte
+function agruparOdCorte(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = `${r.orden_od}|${r.corte}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        cliente: r.cliente,
+        orden_od: r.orden_od,
+        fecha: String(r.fecha_despacho || '').slice(0, 10),
+        corte: r.corte,
+        precio_od: Number(r.precio_od),
+        precio_lista: r.precio_lista != null ? Number(r.precio_lista) : null,
+        diff: Number(r.diff_vs_lista) || 0,
+        vs_lista: r.vs_lista,
+        descuento_pct: Number(r.descuento_pct) || 0,
+        kg: 0,
+        subtotal: 0,
+        lotes: 0,
+      });
+    }
+    const a = map.get(key);
+    a.kg += Number(r.kg) || 0;
+    a.subtotal += Number(r.subtotal_od) || 0;
+    a.lotes += 1;
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1;
+    return String(a.cliente).localeCompare(String(b.cliente));
+  });
+}
+
+function abrirDetalleIndicador(tipo) {
+  const detalle = state.data?.detalle || [];
+  const esDif = tipo === 'dif';
+  const rows = detalle.filter((r) =>
+    esDif ? r.vs_lista === 'MENOR_LISTA' || r.vs_lista === 'MAYOR_LISTA' : Number(r.descuento_pct) > 0
+  );
+  const items = agruparOdCorte(rows);
+  const r = rangoEfectivo();
+
+  $('dFichaEyebrow').textContent = esDif ? 'Precio distinto a la lista' : 'Líneas con descuento';
+  $('dFichaTitulo').textContent = esDif
+    ? `${items.length} corte(s) con precio OD ≠ lista`
+    : `${items.length} corte(s) con descuento en la OD`;
+  $('dFichaMeta').textContent = `Periodo ${formatFechaCorta(r.desde)} → ${formatFechaCorta(r.hasta)} · ordenado de más reciente a más antiguo`;
+
+  const clientes = new Set(items.map((i) => i.cliente)).size;
+  const ods = new Set(items.map((i) => i.orden_od)).size;
+  const valor = items.reduce((s, i) => s + i.subtotal, 0);
+  const impacto = items.reduce((s, i) => s + i.diff * i.kg, 0);
+  $('dFichaKpis').innerHTML = `
+    <div class="mini accent"><div class="v">${clientes}</div><div class="l">Clientes</div></div>
+    <div class="mini accent"><div class="v">${ods}</div><div class="l">Órdenes OD</div></div>
+    <div class="mini"><div class="v">$${money(valor)}</div><div class="l">Valor de esas líneas</div></div>
+    <div class="mini warn"><div class="v">${esDif ? '$' + money(impacto) : items.length}</div><div class="l">${esDif ? 'Impacto vs lista (kg × diferencia)' : 'Cortes con descuento'}</div></div>
+  `;
+
+  const tabla = $('dFichaTabla');
+  tabla.querySelector('thead').innerHTML = `<tr>
+    <th>Fecha OD</th><th>Cliente</th><th>Orden</th><th>Corte</th>
+    <th class="num">Kg</th><th class="num">Precio OD</th><th class="num">Precio lista</th>
+    <th class="num">${esDif ? 'Diferencia / kg' : 'Descuento'}</th><th class="num">Subtotal</th>
+  </tr>`;
+  tabla.querySelector('tbody').innerHTML = items.length
+    ? items
+        .map(
+          (i) => `<tr>
+          <td>${formatFechaCorta(i.fecha) || '—'}</td>
+          <td class="cli-name">${escHtml(i.cliente)}</td>
+          <td>${escHtml(i.orden_od)}</td>
+          <td>${escHtml(i.corte)}</td>
+          <td class="num">${kg(i.kg)}</td>
+          <td class="num">$${money(i.precio_od)}</td>
+          <td class="num">${i.precio_lista != null ? '$' + money(i.precio_lista) : '—'}</td>
+          <td class="num"><span class="pill ${esDif ? pillClass(i.vs_lista) : 'warn'}">${esDif ? (i.diff > 0 ? '+' : '') + '$' + money(i.diff) : i.descuento_pct + '%'}</span></td>
+          <td class="num">$${money(i.subtotal)}</td>
+        </tr>`
+        )
+        .join('')
+    : '<tr><td colspan="9" class="muted">No hay registros en este periodo.</td></tr>';
+
+  $('dFichaOverlay').hidden = false;
+  document.body.classList.add('ficha-open');
+}
+
+function cerrarDetalleIndicador() {
+  $('dFichaOverlay').hidden = true;
+  document.body.classList.remove('ficha-open');
+}
+
 function renderListaClientes() {
   const box = $('listaClientes');
   const q = ($('buscaCliente').value || '').toLowerCase().trim();
@@ -601,6 +700,15 @@ function iniciarApp() {
   $('btnSalir').addEventListener('click', logout);
   $('tabValidador').addEventListener('click', () => cambiarVista('validador'));
   $('tabHistorial').addEventListener('click', () => cambiarVista('historial'));
+  $('statDif').addEventListener('dblclick', () => abrirDetalleIndicador('dif'));
+  $('statDesc').addEventListener('dblclick', () => abrirDetalleIndicador('desc'));
+  $('dFichaCerrar').addEventListener('click', cerrarDetalleIndicador);
+  $('dFichaOverlay').addEventListener('click', (e) => {
+    if (e.target === $('dFichaOverlay')) cerrarDetalleIndicador();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('dFichaOverlay').hidden) cerrarDetalleIndicador();
+  });
   $('buscaCliente').addEventListener('input', renderListaClientes);
   $('buscaCliente').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
