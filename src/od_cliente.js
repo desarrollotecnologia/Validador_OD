@@ -69,9 +69,11 @@ export async function obtenerDetalleOdPorCliente({
       COALESCE(odd.descuento, 0) AS descuento_pct,
       cf.valor AS precio_lista,
       ROUND((odd.solicitud_kg * odd.precio)::numeric, 2) AS subtotal_od,
-      ROUND(
-        SUM(odd.solicitud_kg * odd.precio) OVER (PARTITION BY od.id)::numeric,
-        2
+      -- Total de la OD completa, sin importar filtros de corte / precio cero
+      (
+        SELECT ROUND(COALESCE(SUM(d2.solicitud_kg * d2.precio), 0)::numeric, 2)
+        FROM desposte.orden_despacho_detalle d2
+        WHERE d2.id_orden_despacho = od.id
       ) AS valor_od_orden,
       CASE
         WHEN cf.valor IS NULL THEN 'SIN_LISTA'
