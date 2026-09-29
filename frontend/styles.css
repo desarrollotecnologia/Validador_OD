@@ -42,7 +42,40 @@ body {
     linear-gradient(180deg, #e8f8ec 0%, #f4faf5 100%);
 }
 .lock-screen[hidden] { display: none !important; }
+.btn-home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--accent);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.btn-home svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.btn-home:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.lock-home {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+}
 .lock-card {
+  position: relative;
   width: min(100%, 380px);
   background: #fff;
   border: 1px solid var(--line);
