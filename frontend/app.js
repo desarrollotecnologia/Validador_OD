@@ -596,9 +596,8 @@ async function consultar(silent = false) {
     $('btnExcel').disabled = true;
     if (!silent) setStatus('Consultando SIRT…');
 
-    await cargarListas();
     const params = queryParams();
-    const res = await apiFetch(`/api/od/consulta?${params}`);
+    const [, res] = await Promise.all([cargarListas(), apiFetch(`/api/od/consulta?${params}`)]);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error en consulta');
 

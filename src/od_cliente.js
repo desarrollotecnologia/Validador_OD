@@ -47,7 +47,56 @@ export async function obtenerDetalleOdPorCliente({
     filtros.push(`AND fac.id_factura IS NULL`);
   }
 
+  // SIRT no tiene índices en id_orden_despacho / id_factura: se evita todo subquery
+  // correlacionado y se calcula por conjuntos (una pasada por tabla, hash joins).
   const sql = `
+    WITH od_sel AS (
+      SELECT od.*
+      FROM desposte.orden_despacho od
+      WHERE od.fecha_despacho_planta >= $1::date
+        AND od.fecha_despacho_planta < ($2::date + 1)
+    ),
+    odd_sel AS (
+      SELECT d.*
+      FROM desposte.orden_despacho_detalle d
+      JOIN od_sel o ON o.id = d.id_orden_despacho
+    ),
+    tot_od AS (
+      SELECT id_orden_despacho,
+             ROUND(COALESCE(SUM(solicitud_kg * precio), 0)::numeric, 2) AS valor_od_orden
+      FROM odd_sel
+      GROUP BY id_orden_despacho
+    ),
+    fac_od AS (
+      SELECT DISTINCT ON (v.id_orden_despacho)
+        v.id_orden_despacho,
+        v.id_factura,
+        f.fecha_factura::date AS fecha_factura,
+        f.numeracion,
+        f.numero_factura,
+        f.valor_factura
+      FROM desposte.vehiculo_asignado_orden_despacho v
+      JOIN od_sel o ON o.id = v.id_orden_despacho
+      JOIN financiero.factura f ON f.id = v.id_factura
+      WHERE v.id_factura IS NOT NULL
+        AND COALESCE(f.anulado, '') <> 'S'
+      ORDER BY v.id_orden_despacho, f.fecha_factura DESC NULLS LAST, v.id DESC
+    ),
+    prod_fac AS (
+      SELECT cfc.id_factura,
+             ROUND(COALESCE(SUM(cfc.valor * cfc.cantidad), 0)::numeric, 2) AS valor_productos_factura
+      FROM desposte.criterio_facturacion_corte cfc
+      JOIN financiero.criterio_facturacion cf2 ON cf2.id = cfc.id_criterio_facturacion
+      WHERE cfc.id_factura IN (SELECT id_factura FROM fac_od)
+        AND NOT (cf2.nombre ~* '(retenci|reteica|retefuente)')
+        AND COALESCE(cf2.codigo_producto, '0') NOT IN ('0', '')
+      GROUP BY cfc.id_factura
+    ),
+    fac AS (
+      SELECT fo.*, pf.valor_productos_factura
+      FROM fac_od fo
+      LEFT JOIN prod_fac pf ON pf.id_factura = fo.id_factura
+    )
     SELECT
       e.id AS id_cliente,
       e.nombre AS cliente,
@@ -70,11 +119,7 @@ export async function obtenerDetalleOdPorCliente({
       cf.valor AS precio_lista,
       ROUND((odd.solicitud_kg * odd.precio)::numeric, 2) AS subtotal_od,
       -- Total de la OD completa, sin importar filtros de corte / precio cero
-      (
-        SELECT ROUND(COALESCE(SUM(d2.solicitud_kg * d2.precio), 0)::numeric, 2)
-        FROM desposte.orden_despacho_detalle d2
-        WHERE d2.id_orden_despacho = od.id
-      ) AS valor_od_orden,
+      tot.valor_od_orden,
       CASE
         WHEN cf.valor IS NULL THEN 'SIN_LISTA'
         WHEN ABS(odd.precio - cf.valor) <= 1 THEN 'IGUAL_LISTA'
@@ -92,9 +137,11 @@ export async function obtenerDetalleOdPorCliente({
         WHEN fac.id_factura IS NULL THEN 'SIN_FACTURA'
         ELSE 'FACTURADA'
       END AS estado_factura
-    FROM desposte.orden_despacho_detalle odd
-    JOIN desposte.orden_despacho od
+    FROM odd_sel odd
+    JOIN od_sel od
       ON od.id = odd.id_orden_despacho
+    JOIN tot_od tot
+      ON tot.id_orden_despacho = od.id
     JOIN organizaciones.empresa e
       ON e.id = od.id_empresa
     JOIN desposte.corte c
@@ -103,31 +150,9 @@ export async function obtenerDetalleOdPorCliente({
       ON l.id = odd.id_lote
     LEFT JOIN financiero.criterio_facturacion cf
       ON cf.id = c.id_criterio_facturacion
-    LEFT JOIN LATERAL (
-      SELECT
-        v.id_factura,
-        f.fecha_factura::date AS fecha_factura,
-        f.numeracion,
-        f.numero_factura,
-        f.valor_factura,
-        (
-          SELECT ROUND(COALESCE(SUM(cfc.valor * cfc.cantidad), 0)::numeric, 2)
-          FROM desposte.criterio_facturacion_corte cfc
-          JOIN financiero.criterio_facturacion cf2
-            ON cf2.id = cfc.id_criterio_facturacion
-          WHERE cfc.id_factura = f.id
-            AND NOT (cf2.nombre ~* '(retenci|reteica|retefuente)')
-            AND COALESCE(cf2.codigo_producto, '0') NOT IN ('0', '')
-        ) AS valor_productos_factura
-      FROM desposte.vehiculo_asignado_orden_despacho v
-      JOIN financiero.factura f ON f.id = v.id_factura
-      WHERE v.id_orden_despacho = od.id
-        AND v.id_factura IS NOT NULL
-        AND COALESCE(f.anulado, '') <> 'S'
-      ORDER BY f.fecha_factura DESC NULLS LAST, v.id DESC
-      LIMIT 1
-    ) fac ON TRUE
-    WHERE od.fecha_despacho_planta::date BETWEEN $1::date AND $2::date
+    LEFT JOIN fac
+      ON fac.id_orden_despacho = od.id
+    WHERE TRUE
       ${filtros.join('\n      ')}
     ORDER BY e.nombre, c.nombre, od.codigo, l.codigo
   `;
@@ -142,7 +167,8 @@ export async function listarClientesOd({ fechaDesde, fechaHasta } = {}) {
     SELECT DISTINCT e.nombre AS cliente, e.nit
     FROM desposte.orden_despacho od
     JOIN organizaciones.empresa e ON e.id = od.id_empresa
-    WHERE od.fecha_despacho_planta::date BETWEEN $1::date AND $2::date
+    WHERE od.fecha_despacho_planta >= $1::date
+      AND od.fecha_despacho_planta < ($2::date + 1)
     ORDER BY e.nombre
     `,
     [fechaDesde, fechaHasta]
@@ -164,7 +190,8 @@ export async function listarCortesOd({ fechaDesde, fechaHasta, cliente = null } 
     JOIN desposte.orden_despacho od ON od.id = odd.id_orden_despacho
     JOIN organizaciones.empresa e ON e.id = od.id_empresa
     JOIN desposte.corte c ON c.id = odd.id_corte
-    WHERE od.fecha_despacho_planta::date BETWEEN $1::date AND $2::date
+    WHERE od.fecha_despacho_planta >= $1::date
+      AND od.fecha_despacho_planta < ($2::date + 1)
       ${filtro}
     ORDER BY c.nombre
     `,

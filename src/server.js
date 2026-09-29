@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import os from 'os';
 import path from 'path';
@@ -17,6 +18,7 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+app.use(compression());
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 
