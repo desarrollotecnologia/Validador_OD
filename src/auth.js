@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const PIN = String(process.env.ACCESS_PIN || '0199');
+const PIN = String(process.env.ACCESS_PIN || '0101');
 const SECRET = process.env.ACCESS_SECRET || 'validador-od-colbeef-0199';
 const COOKIE = 'vod_auth';
 const TTL_MS = 12 * 60 * 60 * 1000; // 12 h
